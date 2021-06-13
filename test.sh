@@ -24,3 +24,23 @@ do
     echo "TEST PASS"
   fi
 done
+
+echo "\n\n\nCheck output conversion -16"
+
+
+echo "Test: ./test_input/input_ok_0.ppm 8->16 == ./test_input/input_ok_2.ppm"
+./build/pipeline -i ./test_input/input_ok_0.ppm -o ./build/output.ppm -16
+if cmp -s "./test_input/input_ok_2.ppm" "./build/output.ppm"; then
+  echo "PASS"
+else
+  echo "FAIL"
+fi
+
+
+echo "Test: ./test_input/input_ok_0.ppm 16->8 == ./test_input/input_ok_0.ppm"
+./build/pipeline -i ./test_input/input_ok_2.ppm -o ./build/output.ppm
+if cmp -s "./test_input/input_ok_0.ppm" "./build/output.ppm"; then
+  echo "PASS"
+else
+  echo "FAIL"
+fi

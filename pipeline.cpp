@@ -17,9 +17,9 @@ struct RGB {
 };
 
 struct Image {
-  int width;
-  int height;
-  int color_max;
+  uint16_t width;
+  uint16_t height;
+  uint16_t color_max;
   std::vector<RGB> data;
 };
 
@@ -178,11 +178,72 @@ RC load_ppm(Image &image, const std::string &file_name) {
   return RC_OK;
 }
 
+//
+// Saves Image object to specified file
+//
+RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
+  FILE *file = fopen(file_name.c_str(), "w");
+  if (!file) {
+    printf("Error to open output file %s\n", file_name.c_str());
+    return RC_FAIL;
+  }
+
+  fprintf(file, "P3\n");
+  fprintf(file, "%d %d\n", image.width, image.height);
+  fprintf(file, "%d\n", out16 ? 65535 : 255);
+
+  int i = 0;
+  for (const RGB &rgb : image.data) {
+    auto r = rgb.r;
+    auto g = rgb.g;
+    auto b = rgb.b;
+
+    if (image.color_max == 255 && out16) {
+      // 8 -> 16
+      r <<= 8;
+      g <<= 8;
+      b <<= 8;
+    }
+    if (image.color_max == 65535 && !out16) {
+      // 16 -> 8
+      r >>= 8;
+      g >>= 8;
+      b >>= 8;
+    }
+
+    if (out16) {
+      fprintf(file, "%5d %5d %5d", r, g, b);
+    } else {
+      fprintf(file, "%3d %3d %3d", r, g, b);
+    }
+    if ((i % image.width) < (image.width - 1)) {
+      fprintf(file, "   ");
+    }
+    if ((i > 0) && ((i + 1) % image.width == 0)) {
+      fprintf(file, "\n");
+    }
+    i++;
+  }
+
+  fclose(file);
+  return RC_OK;
+}
+
+//
+// Result of argument parsing
+//
 struct Args {
   std::string input_file = "input_image.ppm";
   std::string output_file{};
+  bool out16;
 };
 
+//
+// Parses command line arguments.
+// -i input file path
+// -o output file path
+// -16 if output file bits=16 (8 by default)
+//
 void parseArgs(Args &args, int argc, char **argv) {
   int i = 0;
   bool hasO = false;
@@ -198,6 +259,8 @@ void parseArgs(Args &args, int argc, char **argv) {
       if (i + 1 < argc) {
         args.output_file = argv[++i];
       }
+    } else if (arg == "-16") {
+      args.out16 = true;
     }
     i++;
   }
@@ -218,5 +281,10 @@ int main(int argc, char **argv) {
   if (load_ppm(image, args.input_file) != RC_OK) {
     return 1;
   }
+
+  if (save_ppm(image, args.output_file, args.out16) != RC_OK) {
+    return 1;
+  }
+
   return 0;
 }
