@@ -1,7 +1,7 @@
+#include <cstdint>
 #include <cstdio>
-#include <gflags/gflags.h>
-
-DEFINE_string(i, "input_image.ppm", "input ppm file");
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -150,7 +150,8 @@ RC load_ppm(Image &image, const std::string &file_name) {
     memcpy(&image.data[0], ptr, image.data.size() * 3);
     for (int i = 0; i < image.data.size(); ++i) {
       const RGB &rgb = image.data[i];
-      if (rgb.r >= image.color_max || rgb.g >= image.color_max || rgb.b >= image.color_max) {
+      if (rgb.r >= image.color_max || rgb.g >= image.color_max ||
+          rgb.b >= image.color_max) {
         printf("Color value of %dth pixel exceeds specified color_max:%d\n", i,
                image.color_max);
         return RC_FAIL;
@@ -162,7 +163,8 @@ RC load_ppm(Image &image, const std::string &file_name) {
       const int g = read_uint16(ptr, end);
       const int b = read_uint16(ptr, end);
 
-      if (r >= image.color_max || g >= image.color_max || b >= image.color_max) {
+      if (r >= image.color_max || g >= image.color_max ||
+          b >= image.color_max) {
         printf("Color value of %dth pixel exceeds specified color_max:%d\n", i,
                image.color_max);
         return RC_FAIL;
@@ -176,13 +178,44 @@ RC load_ppm(Image &image, const std::string &file_name) {
   return RC_OK;
 }
 
+struct Args {
+  std::string input_file = "input_image.ppm";
+  std::string output_file{};
+};
+
+void parseArgs(Args &args, int argc, char **argv) {
+  int i = 0;
+  bool hasO = false;
+
+  while (i < argc) {
+    std::string arg = argv[i];
+    if (arg == "-i") {
+      if (i + 1 < argc) {
+        args.input_file = argv[++i];
+      }
+    } else if (arg == "-o") {
+      hasO = true;
+      if (i + 1 < argc) {
+        args.output_file = argv[++i];
+      }
+    }
+    i++;
+  }
+
+  if (!hasO) {
+    args.output_file =
+        args.input_file.substr(0, args.input_file.find('.')) + "_out.ppm";
+  }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
-  const std::string &input_file = FLAGS_i;
+  Args args{};
+  parseArgs(args, argc, argv);
+
   Image image{};
-  if (load_ppm(image, input_file) != RC_OK) {
+  if (load_ppm(image, args.input_file) != RC_OK) {
     return 1;
   }
   return 0;

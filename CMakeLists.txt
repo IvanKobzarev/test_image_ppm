@@ -13,8 +13,4 @@ target_compile_options(${TARGET} PRIVATE
   -fexceptions
 )
 
-add_subdirectory(third_party/gflags)
-
-target_link_libraries(${TARGET}
-  gflags::gflags
-)
+target_link_libraries(${TARGET})
