@@ -11,16 +11,13 @@ typedef uint32_t RC;
 static constexpr RC RC_OK = 0u;
 static constexpr RC RC_FAIL = 1u;
 
-// TODO: support 8bit without overhead
-struct RGB {
-  uint16_t r, g, b;
-};
-
 struct Image {
   uint16_t width;
   uint16_t height;
-  uint16_t color_max;
-  std::vector<RGB> data;
+  uint8_t bits;
+  std::vector<uint8_t> data;
+  size_t data_size_bytes;
+  size_t px_size;
 };
 
 //
@@ -74,6 +71,22 @@ uint16_t read_uint16(uint8_t *&ptr, const uint8_t *end) {
 }
 
 //
+// Reads uint8 from the position of ptr.
+//
+uint32_t read_uint32(uint8_t *&ptr, const uint8_t *end) {
+  skip_white(ptr, end);
+
+  uint32_t v = 0;
+  for (; ptr != end; ++ptr) {
+    if (*ptr < '0' || *ptr > '9')
+      break;
+
+    v *= 10;
+    v += *ptr - '0';
+  }
+  return v;
+}
+//
 // Moves ptr to the next non-newline character.
 //
 void skip_line(uint8_t *&ptr, const uint8_t *end) {
@@ -126,53 +139,62 @@ RC load_ppm(Image &image, const std::string &file_name) {
   }
 
   skip_comment(ptr, end);
-  image.width = read_uint16(ptr, end);
+  image.width = read_uint32(ptr, end);
   if (image.width < 1) {
     printf("Unsupported width: %d\n", image.width);
     return RC_FAIL;
   }
-  image.height = read_uint16(ptr, end);
+  image.height = read_uint32(ptr, end);
   if (image.height < 1) {
     printf("Unsupported height: %d\n", image.height);
     return RC_FAIL;
   }
 
   skip_comment(ptr, end);
-  image.color_max = read_uint16(ptr, end);
-  if (image.color_max != 255 && image.color_max != 65535) {
-    printf("Unsupported color_max: %d\n", image.color_max);
+  auto color_max = read_uint32(ptr, end);
+  if (color_max == 255) {
+    image.bits = 8;
+  } else if (color_max == 65535) {
+    image.bits = 16;
+  } else {
+    printf("Unsupported color_max: %d\n", color_max);
     return RC_FAIL;
   }
+  image.px_size = 3 * image.width * image.height;
+  image.data_size_bytes = image.px_size * image.bits / 8;
+  image.data.resize(image.data_size_bytes);
 
-  image.data.resize(image.width * image.height);
-  if (pmode == 6) {
-    ptr++;
-    memcpy(&image.data[0], ptr, image.data.size() * 3);
-    for (int i = 0; i < image.data.size(); ++i) {
-      const RGB &rgb = image.data[i];
-      if (rgb.r >= image.color_max || rgb.g >= image.color_max ||
-          rgb.b >= image.color_max) {
-        printf("Color value of %dth pixel exceeds specified color_max:%d\n", i,
-               image.color_max);
-        return RC_FAIL;
+  if (image.bits == 8) {
+    // bits 8
+    uint8_t *image_data = image.data.data();
+    if (pmode == 6) {
+      ptr++;
+      memcpy(image_data, ptr, image.data_size_bytes);
+    } else {
+      for (int i = 0; i < image.px_size; ++i) {
+        const auto c = read_uint32(ptr, end);
+        if (c > 255) {
+          printf("%dth color value exceeds 255\n", i);
+          return RC_FAIL;
+        }
+        image_data[i] = c;
       }
     }
-  } else if (pmode == 3) {
-    for (int i = 0; i < image.data.size(); i++) {
-      const int r = read_uint16(ptr, end);
-      const int g = read_uint16(ptr, end);
-      const int b = read_uint16(ptr, end);
-
-      if (r >= image.color_max || g >= image.color_max ||
-          b >= image.color_max) {
-        printf("Color value of %dth pixel exceeds specified color_max:%d\n", i,
-               image.color_max);
-        return RC_FAIL;
+  } else {
+    // bits 16
+    uint16_t *image_data = (uint16_t *)image.data.data();
+    if (pmode == 6) {
+      ptr++;
+      memcpy(image_data, ptr, image.data_size_bytes);
+    } else {
+      for (int i = 0; i < image.px_size; ++i) {
+        const auto c = read_uint32(ptr, end);
+        if (c > 65535) {
+          printf("%dth color value exceeds 65535\n", i);
+          return RC_FAIL;
+        }
+        image_data[i] = c;
       }
-
-      image.data[i].r = r;
-      image.data[i].g = g;
-      image.data[i].b = b;
     }
   }
   return RC_OK;
@@ -192,37 +214,57 @@ RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
   fprintf(file, "%d %d\n", image.width, image.height);
   fprintf(file, "%d\n", out16 ? 65535 : 255);
 
-  int i = 0;
-  for (const RGB &rgb : image.data) {
-    auto r = rgb.r;
-    auto g = rgb.g;
-    auto b = rgb.b;
+  if (image.bits == 8) {
+    const uint8_t *image_data = image.data.data();
+    for (int i = 0; i < image.width * image.height; ++i) {
+      uint16_t r = image_data[3 * i + 0];
+      uint16_t g = image_data[3 * i + 1];
+      uint16_t b = image_data[3 * i + 2];
 
-    if (image.color_max == 255 && out16) {
-      // 8 -> 16
-      r <<= 8;
-      g <<= 8;
-      b <<= 8;
-    }
-    if (image.color_max == 65535 && !out16) {
-      // 16 -> 8
-      r >>= 8;
-      g >>= 8;
-      b >>= 8;
-    }
+      if (out16) {
+        // 8 -> 16
+        r <<= 8;
+        g <<= 8;
+        b <<= 8;
+      }
 
-    if (out16) {
-      fprintf(file, "%5d %5d %5d", r, g, b);
-    } else {
-      fprintf(file, "%3d %3d %3d", r, g, b);
+      if (out16) {
+        fprintf(file, "%5d %5d %5d", r, g, b);
+      } else {
+        fprintf(file, "%3d %3d %3d", r, g, b);
+      }
+      if ((i % image.width) < (image.width - 1)) {
+        fprintf(file, "   ");
+      }
+      if ((i > 0) && ((i + 1) % image.width == 0)) {
+        fprintf(file, "\n");
+      }
     }
-    if ((i % image.width) < (image.width - 1)) {
-      fprintf(file, "   ");
+  } else {
+    const uint16_t *image_data = (uint16_t *)image.data.data();
+    for (int i = 0; i < image.width * image.height; ++i) {
+      uint16_t r = image_data[3 * i + 0];
+      uint16_t g = image_data[3 * i + 1];
+      uint16_t b = image_data[3 * i + 2];
+      if (!out16) {
+        // 16 -> 8
+        r >>= 8;
+        g >>= 8;
+        b >>= 8;
+      }
+
+      if (out16) {
+        fprintf(file, "%5d %5d %5d", r, g, b);
+      } else {
+        fprintf(file, "%3d %3d %3d", r, g, b);
+      }
+      if ((i % image.width) < (image.width - 1)) {
+        fprintf(file, "   ");
+      }
+      if ((i > 0) && ((i + 1) % image.width == 0)) {
+        fprintf(file, "\n");
+      }
     }
-    if ((i > 0) && ((i + 1) % image.width == 0)) {
-      fprintf(file, "\n");
-    }
-    i++;
   }
 
   fclose(file);

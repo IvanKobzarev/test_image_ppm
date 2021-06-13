@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "\n\n\nCheck OK inputs"
-for F in $(find test_input -name input_ok_*.ppm)
+for F in $(find test_input -name 'input_ok_[0-9].ppm')
 do
   echo "\ninput:$F"
   ./build/pipeline -i $F
@@ -11,9 +11,10 @@ do
     echo "TEST FAIL"
   fi
 done
+rm test_input/input_ok_*_out.ppm
 
 echo "\n\n\nCheck FAIL inputs:"
-for F in $(find test_input -name input_fail_*.ppm)
+for F in $(find test_input -name input_fail_[0-9].ppm)
 do
   echo "\ninput:$F"
   ./build/pipeline -i $F
@@ -34,6 +35,7 @@ if cmp -s "./test_input/input_ok_2.ppm" "./build/output.ppm"; then
   echo "PASS"
 else
   echo "FAIL"
+  diff ./test_input/input_ok_2.ppm ./build/output.ppm
 fi
 
 
@@ -43,4 +45,5 @@ if cmp -s "./test_input/input_ok_0.ppm" "./build/output.ppm"; then
   echo "PASS"
 else
   echo "FAIL"
+  diff ./test_input/input_ok_0.ppm ./build/output.ppm
 fi
