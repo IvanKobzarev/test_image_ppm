@@ -20,6 +20,7 @@ struct Args {
   std::string output_file{};
   bool out16;
   bool out_gray;
+  bool out_flip;
 };
 
 //
@@ -239,10 +240,47 @@ RC load_ppm(Image &image, const std::string &file_name) {
   return RC_OK;
 }
 
+void transform_gray(uint16_t &r, uint16_t &g, uint16_t &b) {
+  r = r * 0.299f + g * 0.587f + b * 0.114f;
+  g = r;
+  b = r;
+}
+void transform_8_to_16(uint16_t &r, uint16_t &g, uint16_t &b) {
+  r <<= 8;
+  g <<= 8;
+  b <<= 8;
+}
+void transform_16_to_8(uint16_t &r, uint16_t &g, uint16_t &b) {
+  r >>= 8;
+  g >>= 8;
+  b >>= 8;
+}
+void fprint8(FILE *file, const uint16_t &r, const uint16_t &g,
+             const uint16_t &b) {
+  fprintf(file, "%3d %3d %3d", r, g, b);
+}
+void fprint16(FILE *file, const uint16_t &r, const uint16_t &g,
+              const uint16_t &b) {
+  fprintf(file, "%5d %5d %5d", r, g, b);
+}
+void fprint_format(FILE *file, int i, uint32_t image_width) {
+  if ((i % image_width) < (image_width - 1)) {
+    fprintf(file, "   ");
+  }
+  if ((i > 0) && ((i + 1) % image_width == 0)) {
+    fprintf(file, "\n");
+  }
+}
+void i_step_inc(int &i) { i++; }
+void i_step_dec(int &i) { i--; }
+
+typedef void (*fun_px_transform)(uint16_t &, uint16_t &, uint16_t &);
+
 //
 // Saves Image object to specified file
 //
 // TODO: join 8 and 16 image transforms functionally
+//
 RC save_ppm(const Image &image, const std::string &file_name,
             const Args &args) {
   FILE *file = fopen(file_name.c_str(), "w");
@@ -255,68 +293,73 @@ RC save_ppm(const Image &image, const std::string &file_name,
   fprintf(file, "%d %d\n", image.width, image.height);
   fprintf(file, "%d\n", args.out16 ? 65535 : 255);
 
+  std::vector<fun_px_transform> transforms_px;
+  if (args.out_gray) {
+    transforms_px.push_back(&transform_gray);
+  }
+  void (*fprint)(FILE *, const uint16_t &, const uint16_t &, const uint16_t &);
+  fprint = args.out16 ? &fprint16 : &fprint8;
+  void (*xstep)(int &);
+  xstep = args.out_flip ? &i_step_dec : &i_step_inc;
   if (image.bits == 8) {
+    if (args.out16) {
+      transforms_px.push_back(&transform_8_to_16);
+    }
     const uint8_t *image_data = image.data.data();
-    for (int i = 0; i < image.width * image.height; ++i) {
-      uint16_t r = image_data[3 * i + 0];
-      uint16_t g = image_data[3 * i + 1];
-      uint16_t b = image_data[3 * i + 2];
+    int x = 0;
+    int x_stop = image.width;
+    int i = 0;
+    for (int y = 0; y < image.height; ++y) {
+      x = 0;
+      x_stop = image.width;
+      if (args.out_flip) {
+        x = image.width - 1;
+        x_stop = -1;
+      }
+      while (x != x_stop) {
+        const int idx = image.width * y + x;
+        uint16_t r = image_data[3 * idx + 0];
+        uint16_t g = image_data[3 * idx + 1];
+        uint16_t b = image_data[3 * idx + 2];
 
-      if (args.out_gray) {
-        r = r * 0.299f + g * 0.587f + b * 0.114f;
-        g = r;
-        b = r;
-      }
-
-      if (args.out16) {
-        // 8 -> 16
-        r <<= 8;
-        g <<= 8;
-        b <<= 8;
-      }
-
-      if (args.out16) {
-        fprintf(file, "%5d %5d %5d", r, g, b);
-      } else {
-        fprintf(file, "%3d %3d %3d", r, g, b);
-      }
-      if ((i % image.width) < (image.width - 1)) {
-        fprintf(file, "   ");
-      }
-      if ((i > 0) && ((i + 1) % image.width == 0)) {
-        fprintf(file, "\n");
+        for (const auto &transform : transforms_px) {
+          (*transform)(r, g, b);
+        }
+        fprint(file, r, g, b);
+        fprint_format(file, i, image.width);
+        xstep(x);
+        i++;
       }
     }
   } else {
+    // image bits 16
+    if (!args.out16) {
+      transforms_px.push_back(&transform_16_to_8);
+    }
     const uint16_t *image_data = (uint16_t *)image.data.data();
-    for (int i = 0; i < image.width * image.height; ++i) {
-      uint16_t r = image_data[3 * i + 0];
-      uint16_t g = image_data[3 * i + 1];
-      uint16_t b = image_data[3 * i + 2];
+    int x = 0;
+    int x_stop = image.width;
+    int i = 0;
+    for (int y = 0; y < image.height; ++y) {
+      x = 0;
+      x_stop = image.width;
+      if (args.out_flip) {
+        x = image.width - 1;
+        x_stop = -1;
+      }
+      while (x != x_stop) {
+        const int idx = image.width * y + x;
+        uint16_t r = image_data[3 * idx + 0];
+        uint16_t g = image_data[3 * idx + 1];
+        uint16_t b = image_data[3 * idx + 2];
 
-      if (args.out_gray) {
-        r = r * 0.299f + g * 0.587f + b * 0.114f;
-        g = r;
-        b = r;
-      }
-
-      if (!args.out16) {
-        // 16 -> 8
-        r >>= 8;
-        g >>= 8;
-        b >>= 8;
-      }
-
-      if (args.out16) {
-        fprintf(file, "%5d %5d %5d", r, g, b);
-      } else {
-        fprintf(file, "%3d %3d %3d", r, g, b);
-      }
-      if ((i % image.width) < (image.width - 1)) {
-        fprintf(file, "   ");
-      }
-      if ((i > 0) && ((i + 1) % image.width == 0)) {
-        fprintf(file, "\n");
+        for (const auto &transform : transforms_px) {
+          (*transform)(r, g, b);
+        }
+        fprint(file, r, g, b);
+        fprint_format(file, i, image.width);
+        xstep(x);
+        i++;
       }
     }
   }
@@ -350,6 +393,8 @@ void parseArgs(Args &args, int argc, char **argv) {
       args.out16 = true;
     } else if (arg == "-gray") {
       args.out_gray = true;
+    } else if (arg == "-flip") {
+      args.out_flip = true;
     }
     i++;
   }
@@ -387,8 +432,9 @@ int main(int argc, char **argv) {
       std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
   const double millis = nanos / 1000000.f / benchmark_n;
 
-  printf("Parse args, load ppm, save ppm %d times AVG millis: %f\n",
-         benchmark_n, millis);
+  printf(
+      "[Parse args, load ppm, transforms, save ppm] %d times AVG millis: %f\n",
+      benchmark_n, millis);
 
   return 0;
 }

@@ -47,3 +47,21 @@ else
   echo "FAIL"
   diff ./test/input_ok_0.ppm ./build/output.ppm
 fi
+
+echo "Test: ./test/input_ok_0.ppm -gray == ./test/input_ok_4.ppm"
+./build/pipeline -i ./test/input_ok_0.ppm -gray -o ./build/output.ppm
+if cmp -s "./test/input_ok_4.ppm" "./build/output.ppm"; then
+  echo "PASS"
+else
+  echo "FAIL"
+  diff ./test/input_ok_4.ppm ./build/output.ppm
+fi
+
+echo "Test: ./test/input_ok_0.ppm -flip == ./test/input_ok_3.ppm"
+./build/pipeline -i ./test/input_ok_0.ppm -flip -o ./build/output.ppm
+if cmp -s "./test/input_ok_3.ppm" "./build/output.ppm"; then
+  echo "PASS"
+else
+  echo "FAIL"
+  diff ./test/input_ok_3.ppm ./build/output.ppm
+fi
