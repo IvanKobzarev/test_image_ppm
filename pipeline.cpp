@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -339,17 +340,32 @@ void parseArgs(Args &args, int argc, char **argv) {
 } // namespace
 
 int main(int argc, char **argv) {
-  Args args{};
-  parseArgs(args, argc, argv);
+  static constexpr int benchmark_n = 10;
+  std::chrono::duration<double> duration{};
+  for (int i = 0; i < benchmark_n; ++i) {
+    auto start = std::chrono::high_resolution_clock::now();
+    Args args{};
+    parseArgs(args, argc, argv);
 
-  Image image{};
-  if (load_ppm(image, args.input_file) != RC_OK) {
-    return 1;
+    Image image{};
+    if (load_ppm(image, args.input_file) != RC_OK) {
+      return 1;
+    }
+
+    if (save_ppm(image, args.output_file, args.out16) != RC_OK) {
+      return 1;
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    duration += end - start;
   }
 
-  if (save_ppm(image, args.output_file, args.out16) != RC_OK) {
-    return 1;
-  }
+  const auto nanos =
+      std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+  const double millis = nanos / 1000000.f / benchmark_n;
+
+  printf("Parse args, load ppm, save ppm %d times AVG millis: %f\n", benchmark_n,
+         millis);
 
   return 0;
 }
