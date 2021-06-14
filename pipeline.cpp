@@ -13,8 +13,18 @@ static constexpr RC RC_OK = 0u;
 static constexpr RC RC_FAIL = 1u;
 
 //
+// Result of argument parsing
+//
+struct Args {
+  std::string input_file = "input_image.ppm";
+  std::string output_file{};
+  bool out16;
+  bool out_gray;
+};
+
+//
 // Struct to hold image data.
-// Pixel data is stored as a blob. 
+// Pixel data is stored as a blob.
 //
 struct Image {
   uint32_t width;
@@ -232,7 +242,9 @@ RC load_ppm(Image &image, const std::string &file_name) {
 //
 // Saves Image object to specified file
 //
-RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
+// TODO: join 8 and 16 image transforms functionally
+RC save_ppm(const Image &image, const std::string &file_name,
+            const Args &args) {
   FILE *file = fopen(file_name.c_str(), "w");
   if (!file) {
     printf("Error to open output file %s\n", file_name.c_str());
@@ -241,7 +253,7 @@ RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
 
   fprintf(file, "P3\n");
   fprintf(file, "%d %d\n", image.width, image.height);
-  fprintf(file, "%d\n", out16 ? 65535 : 255);
+  fprintf(file, "%d\n", args.out16 ? 65535 : 255);
 
   if (image.bits == 8) {
     const uint8_t *image_data = image.data.data();
@@ -250,14 +262,20 @@ RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
       uint16_t g = image_data[3 * i + 1];
       uint16_t b = image_data[3 * i + 2];
 
-      if (out16) {
+      if (args.out_gray) {
+        r = r * 0.299f + g * 0.587f + b * 0.114f;
+        g = r;
+        b = r;
+      }
+
+      if (args.out16) {
         // 8 -> 16
         r <<= 8;
         g <<= 8;
         b <<= 8;
       }
 
-      if (out16) {
+      if (args.out16) {
         fprintf(file, "%5d %5d %5d", r, g, b);
       } else {
         fprintf(file, "%3d %3d %3d", r, g, b);
@@ -275,14 +293,21 @@ RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
       uint16_t r = image_data[3 * i + 0];
       uint16_t g = image_data[3 * i + 1];
       uint16_t b = image_data[3 * i + 2];
-      if (!out16) {
+
+      if (args.out_gray) {
+        r = r * 0.299f + g * 0.587f + b * 0.114f;
+        g = r;
+        b = r;
+      }
+
+      if (!args.out16) {
         // 16 -> 8
         r >>= 8;
         g >>= 8;
         b >>= 8;
       }
 
-      if (out16) {
+      if (args.out16) {
         fprintf(file, "%5d %5d %5d", r, g, b);
       } else {
         fprintf(file, "%3d %3d %3d", r, g, b);
@@ -299,15 +324,6 @@ RC save_ppm(const Image &image, const std::string &file_name, bool out16) {
   fclose(file);
   return RC_OK;
 }
-
-//
-// Result of argument parsing
-//
-struct Args {
-  std::string input_file = "input_image.ppm";
-  std::string output_file{};
-  bool out16;
-};
 
 //
 // Parses command line arguments.
@@ -332,6 +348,8 @@ void parseArgs(Args &args, int argc, char **argv) {
       }
     } else if (arg == "-16") {
       args.out16 = true;
+    } else if (arg == "-gray") {
+      args.out_gray = true;
     }
     i++;
   }
@@ -357,7 +375,7 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    if (save_ppm(image, args.output_file, args.out16) != RC_OK) {
+    if (save_ppm(image, args.output_file, args) != RC_OK) {
       return 1;
     }
 
@@ -369,8 +387,8 @@ int main(int argc, char **argv) {
       std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
   const double millis = nanos / 1000000.f / benchmark_n;
 
-  printf("Parse args, load ppm, save ppm %d times AVG millis: %f\n", benchmark_n,
-         millis);
+  printf("Parse args, load ppm, save ppm %d times AVG millis: %f\n",
+         benchmark_n, millis);
 
   return 0;
 }
