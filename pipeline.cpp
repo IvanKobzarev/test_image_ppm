@@ -255,17 +255,9 @@ void transform_16_to_8(uint16_t &r, uint16_t &g, uint16_t &b) {
   g >>= 8;
   b >>= 8;
 }
-void fprint(FILE *file, int i, uint32_t image_width, const uint16_t &r,
-            const uint16_t &g, const uint16_t &b) {
-  if (i % image_width == 0) {
-    fprintf(file, "%d %d %d", r, g, b);
-  } else if ((i + 1) % image_width == 0) {
-    fprintf(file, " %d %d %d\n", r, g, b);
-  } else {
-    fprintf(file, " %d %d %d", r, g, b);
-  }
-}
+
 void i_step_inc(int &i) { i++; }
+
 void i_step_dec(int &i) { i--; }
 
 typedef void (*fun_px_transform)(uint16_t &, uint16_t &, uint16_t &);
@@ -285,8 +277,6 @@ void read_rgb16(const uint8_t *data, int idx, uint16_t &r, uint16_t &g,
 }
 //
 // Saves Image object to specified file
-//
-// TODO: join 8 and 16 image transforms functionally
 //
 RC save_ppm(const Image &image, const std::string &file_name,
             const Args &args) {
@@ -332,9 +322,6 @@ RC save_ppm(const Image &image, const std::string &file_name,
   int x_stop = image.width;
   int i = 0;
 
-  // size_t pixel_data_size = image.px_size * (image.bits / 8) + image.width *
-  // image.height; std::vector<uint8_t*> buffer; buffer.resize(pixel_data_size);
-
   for (int y = 0; y < image.height; ++y) {
     x = 0;
     x_stop = image.width;
@@ -347,7 +334,14 @@ RC save_ppm(const Image &image, const std::string &file_name,
       for (const auto &transform : transforms_px) {
         (*transform)(r, g, b);
       }
-      fprint(file, i, image.width, r, g, b);
+
+      if (i % image.width == 0) {
+        fprintf(file, " %d %d %d", r, g, b);
+      } else if ((i + 1) % image.width == 0) {
+        fprintf(file, "%d %d %d\n", r, g, b);
+      } else {
+        fprintf(file, "%d %d %d", r, g, b);
+      }
       xstep(x);
       i++;
     }
