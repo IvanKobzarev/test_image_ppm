@@ -4,6 +4,7 @@ project(${TARGET} CXX)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -Wall")
 
 
 set(SOURCE_FILES pipeline.cpp)

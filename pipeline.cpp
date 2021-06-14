@@ -276,6 +276,19 @@ void i_step_dec(int &i) { i--; }
 
 typedef void (*fun_px_transform)(uint16_t &, uint16_t &, uint16_t &);
 
+void read_rgb8(const uint8_t *data, int idx, uint16_t &r, uint16_t &g,
+               uint16_t &b) {
+  r = data[3 * idx + 0];
+  g = data[3 * idx + 1];
+  b = data[3 * idx + 2];
+}
+void read_rgb16(const uint8_t *data, int idx, uint16_t &r, uint16_t &g,
+                uint16_t &b) {
+  uint16_t *data16 = (uint16_t *)data;
+  r = data16[3 * idx + 0];
+  g = data16[3 * idx + 1];
+  b = data16[3 * idx + 2];
+}
 //
 // Saves Image object to specified file
 //
@@ -289,10 +302,12 @@ RC save_ppm(const Image &image, const std::string &file_name,
     return RC_FAIL;
   }
 
+  // Writing header
   fprintf(file, "P3\n");
   fprintf(file, "%d %d\n", image.width, image.height);
   fprintf(file, "%d\n", args.out16 ? 65535 : 255);
 
+  // Px transforms inplace on r g b
   std::vector<fun_px_transform> transforms_px;
   if (args.out_gray) {
     transforms_px.push_back(&transform_gray);
@@ -301,66 +316,40 @@ RC save_ppm(const Image &image, const std::string &file_name,
   fprint = args.out16 ? &fprint16 : &fprint8;
   void (*xstep)(int &);
   xstep = args.out_flip ? &i_step_dec : &i_step_inc;
+  uint16_t r, g, b;
+  int idx;
+  const uint8_t *image_data = image.data.data();
+  void (*read_rgb)(const uint8_t *, int, uint16_t &, uint16_t &, uint16_t &);
+  read_rgb = image.bits == 8 ? read_rgb8 : read_rgb16;
   if (image.bits == 8) {
     if (args.out16) {
       transforms_px.push_back(&transform_8_to_16);
     }
-    const uint8_t *image_data = image.data.data();
-    int x = 0;
-    int x_stop = image.width;
-    int i = 0;
-    for (int y = 0; y < image.height; ++y) {
-      x = 0;
-      x_stop = image.width;
-      if (args.out_flip) {
-        x = image.width - 1;
-        x_stop = -1;
-      }
-      while (x != x_stop) {
-        const int idx = image.width * y + x;
-        uint16_t r = image_data[3 * idx + 0];
-        uint16_t g = image_data[3 * idx + 1];
-        uint16_t b = image_data[3 * idx + 2];
-
-        for (const auto &transform : transforms_px) {
-          (*transform)(r, g, b);
-        }
-        fprint(file, r, g, b);
-        fprint_format(file, i, image.width);
-        xstep(x);
-        i++;
-      }
-    }
   } else {
-    // image bits 16
     if (!args.out16) {
       transforms_px.push_back(&transform_16_to_8);
     }
-    const uint16_t *image_data = (uint16_t *)image.data.data();
-    int x = 0;
-    int x_stop = image.width;
-    int i = 0;
-    for (int y = 0; y < image.height; ++y) {
-      x = 0;
-      x_stop = image.width;
-      if (args.out_flip) {
-        x = image.width - 1;
-        x_stop = -1;
-      }
-      while (x != x_stop) {
-        const int idx = image.width * y + x;
-        uint16_t r = image_data[3 * idx + 0];
-        uint16_t g = image_data[3 * idx + 1];
-        uint16_t b = image_data[3 * idx + 2];
+  }
 
-        for (const auto &transform : transforms_px) {
-          (*transform)(r, g, b);
-        }
-        fprint(file, r, g, b);
-        fprint_format(file, i, image.width);
-        xstep(x);
-        i++;
+  int x = 0;
+  int x_stop = image.width;
+  int i = 0;
+  for (int y = 0; y < image.height; ++y) {
+    x = 0;
+    x_stop = image.width;
+    if (args.out_flip) {
+      x = image.width - 1;
+      x_stop = -1;
+    }
+    while (x != x_stop) {
+      read_rgb(image_data, image.width * y + x, r, g, b);
+      for (const auto &transform : transforms_px) {
+        (*transform)(r, g, b);
       }
+      fprint(file, r, g, b);
+      fprint_format(file, i, image.width);
+      xstep(x);
+      i++;
     }
   }
 
