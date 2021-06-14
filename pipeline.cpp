@@ -12,13 +12,17 @@ typedef uint32_t RC;
 static constexpr RC RC_OK = 0u;
 static constexpr RC RC_FAIL = 1u;
 
+//
+// Struct to hold image data.
+// Pixel data is stored as a blob. 
+//
 struct Image {
   uint32_t width;
   uint32_t height;
   uint32_t bits;
-  std::vector<uint8_t> data;
   size_t data_size_bytes;
   size_t px_size;
+  std::vector<uint8_t> data;
 };
 
 //
@@ -92,6 +96,7 @@ RC read_uint32(uint32_t &out, uint8_t *&ptr, const uint8_t *end) {
   out = v;
   return RC_OK;
 }
+
 //
 // Moves ptr to the next non-newline character.
 //
