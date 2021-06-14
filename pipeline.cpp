@@ -316,11 +316,17 @@ RC save_ppm(const Image &image, const std::string &file_name,
   fprint = args.out16 ? &fprint16 : &fprint8;
   void (*xstep)(int &);
   xstep = args.out_flip ? &i_step_dec : &i_step_inc;
+
+  // preallocate variables
   uint16_t r, g, b;
   int idx;
   const uint8_t *image_data = image.data.data();
+
+  // read function to join 8bit and 16bit cases
   void (*read_rgb)(const uint8_t *, int, uint16_t &, uint16_t &, uint16_t &);
   read_rgb = image.bits == 8 ? read_rgb8 : read_rgb16;
+
+  // bits change transformation
   if (image.bits == 8) {
     if (args.out16) {
       transforms_px.push_back(&transform_8_to_16);
