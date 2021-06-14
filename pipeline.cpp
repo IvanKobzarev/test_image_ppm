@@ -255,20 +255,14 @@ void transform_16_to_8(uint16_t &r, uint16_t &g, uint16_t &b) {
   g >>= 8;
   b >>= 8;
 }
-void fprint8(FILE *file, const uint16_t &r, const uint16_t &g,
-             const uint16_t &b) {
-  fprintf(file, "%3d %3d %3d", r, g, b);
-}
-void fprint16(FILE *file, const uint16_t &r, const uint16_t &g,
-              const uint16_t &b) {
-  fprintf(file, "%5d %5d %5d", r, g, b);
-}
-void fprint_format(FILE *file, int i, uint32_t image_width) {
-  if ((i % image_width) < (image_width - 1)) {
-    fprintf(file, "   ");
-  }
-  if ((i > 0) && ((i + 1) % image_width == 0)) {
-    fprintf(file, "\n");
+void fprint(FILE *file, int i, uint32_t image_width, const uint16_t &r,
+            const uint16_t &g, const uint16_t &b) {
+  if (i % image_width == 0) {
+    fprintf(file, "%d %d %d", r, g, b);
+  } else if ((i + 1) % image_width == 0) {
+    fprintf(file, " %d %d %d\n", r, g, b);
+  } else {
+    fprintf(file, " %d %d %d", r, g, b);
   }
 }
 void i_step_inc(int &i) { i++; }
@@ -312,15 +306,8 @@ RC save_ppm(const Image &image, const std::string &file_name,
   if (args.out_gray) {
     transforms_px.push_back(&transform_gray);
   }
-  void (*fprint)(FILE *, const uint16_t &, const uint16_t &, const uint16_t &);
-  fprint = args.out16 ? &fprint16 : &fprint8;
   void (*xstep)(int &);
   xstep = args.out_flip ? &i_step_dec : &i_step_inc;
-
-  // preallocate variables
-  uint16_t r, g, b;
-  int idx;
-  const uint8_t *image_data = image.data.data();
 
   // read function to join 8bit and 16bit cases
   void (*read_rgb)(const uint8_t *, int, uint16_t &, uint16_t &, uint16_t &);
@@ -337,9 +324,17 @@ RC save_ppm(const Image &image, const std::string &file_name,
     }
   }
 
+  // preallocate variables
+  uint16_t r, g, b;
+  int idx;
+  const uint8_t *image_data = image.data.data();
   int x = 0;
   int x_stop = image.width;
   int i = 0;
+
+  // size_t pixel_data_size = image.px_size * (image.bits / 8) + image.width *
+  // image.height; std::vector<uint8_t*> buffer; buffer.resize(pixel_data_size);
+
   for (int y = 0; y < image.height; ++y) {
     x = 0;
     x_stop = image.width;
@@ -352,8 +347,7 @@ RC save_ppm(const Image &image, const std::string &file_name,
       for (const auto &transform : transforms_px) {
         (*transform)(r, g, b);
       }
-      fprint(file, r, g, b);
-      fprint_format(file, i, image.width);
+      fprint(file, i, image.width, r, g, b);
       xstep(x);
       i++;
     }

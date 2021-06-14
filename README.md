@@ -3,7 +3,7 @@
 sh ./build.sh
 ```
 
-## Test:
+## Test
 ```
 sh ./test.sh
 ```
