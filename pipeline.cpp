@@ -336,11 +336,11 @@ RC save_ppm(const Image &image, const std::string &file_name,
       }
 
       if (i % image.width == 0) {
-        fprintf(file, " %d %d %d", r, g, b);
-      } else if ((i + 1) % image.width == 0) {
-        fprintf(file, "%d %d %d\n", r, g, b);
-      } else {
         fprintf(file, "%d %d %d", r, g, b);
+      } else if ((i + 1) % image.width == 0) {
+        fprintf(file, " %d %d %d\n", r, g, b);
+      } else {
+        fprintf(file, " %d %d %d", r, g, b);
       }
       xstep(x);
       i++;
